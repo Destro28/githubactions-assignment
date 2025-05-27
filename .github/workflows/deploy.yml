@@ -22,6 +22,10 @@ jobs:
       - name: Save Docker image as tar
         run: docker save flask-api:latest -o flask-api.tar
 
+      - name: Fix permissions on tar file
+        run: chmod 644 flask-api.tar
+
+
       - name: Copy Docker image to VM
         uses: appleboy/scp-action@v0.1.7
         with:
