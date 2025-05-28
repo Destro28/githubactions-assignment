@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -25,7 +25,6 @@ jobs:
       - name: Fix permissions on tar file
         run: chmod 644 flask-api.tar
 
-
       - name: Copy Docker image to VM
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -35,14 +34,33 @@ jobs:
           source: "flask-api.tar"
           target: "~/"
 
-      - name: Deploy on VM via SSH
+      - name: Deploy on VM via SSH (Zero Downtime)
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
+            # 1. Load the new Docker image
             docker load -i ~/flask-api.tar
+      
+            # 2. Start the new container on a different port (e.g., 8080)
+            docker run -d --name flask-api-new -p 8080:80 flask-api:latest
+      
+            # 3. Health check: Wait until the new container is healthy
+            until curl -s http://localhost:8080/sayHello | grep -q "Hello User"; do
+              echo "Waiting for new container to be ready..."
+              sleep 2
+            done
+      
+            # 4. Stop and remove the old container
             docker stop flask-api || true
             docker rm flask-api || true
+      
+            # 5. Start the new container on the main port (80:80)
             docker run -d --name flask-api -p 80:80 flask-api:latest
+      
+            # 6. Remove the temporary new container
+            docker stop flask-api-new
+            docker rm flask-api-new
+
