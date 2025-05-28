@@ -40,27 +40,27 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 15m
           script: |
-            # 1. Load the new Docker image
+            docker stop flask-api-new || true
+            docker rm flask-api-new || true
             docker load -i ~/flask-api.tar
-      
-            # 2. Start the new container on a different port (e.g., 8080)
             docker run -d --name flask-api-new -p 8080:80 flask-api:latest
-      
-            # 3. Health check: Wait until the new container is healthy
+            ATTEMPTS=0
             until curl -s http://localhost:8080/sayHello | grep -q "Hello User"; do
               echo "Waiting for new container to be ready..."
               sleep 2
+              ATTEMPTS=$((ATTEMPTS+1))
+              if [ $ATTEMPTS -ge 30 ]; then
+                echo "Health check failed after 60 seconds."
+                docker logs flask-api-new
+                exit 1
+              fi
             done
-      
-            # 4. Stop and remove the old container
             docker stop flask-api || true
             docker rm flask-api || true
-      
-            # 5. Start the new container on the main port (80:80)
             docker run -d --name flask-api -p 80:80 flask-api:latest
-      
-            # 6. Remove the temporary new container
             docker stop flask-api-new
             docker rm flask-api-new
 
